@@ -99,6 +99,19 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      get_fund_overview: {
+        Args: { p_month: string }
+        Returns: {
+          active_members: number
+          monthly_total: number
+          event_total: number
+          monthly_paid_members: number
+          total_contributions: number
+          total_events: number
+          total_expenses: number
+          balance: number
+        }[]
+      }
       is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean

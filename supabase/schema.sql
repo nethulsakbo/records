@@ -1,9 +1,11 @@
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null,
-  role text not null default 'pending' check (role in ('admin', 'viewer', 'pending')),
+  role text not null default 'viewer' check (role in ('admin', 'viewer', 'pending')),
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles alter column role set default 'viewer';
 
 create table if not exists public.members (
   id uuid primary key default gen_random_uuid(),
@@ -83,8 +85,8 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email)
-  values (new.id, coalesce(new.email, ''))
+  insert into public.profiles (id, email, role)
+  values (new.id, coalesce(new.email, ''), 'viewer')
   on conflict (id) do update set email = excluded.email;
   return new;
 end;
@@ -94,6 +96,8 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+update public.profiles set role = 'viewer' where role = 'pending';
 
 alter table public.profiles enable row level security;
 alter table public.members enable row level security;
@@ -105,9 +109,10 @@ create policy "Users can read their own profile and admins can read all"
   using (id = (select auth.uid()) or (select public.is_admin()));
 
 drop policy if exists "Authenticated users can read members" on public.members;
-create policy "Authenticated users can read members"
+drop policy if exists "Admins can read members" on public.members;
+create policy "Admins can read members"
   on public.members for select to authenticated
-  using ((select public.is_member()));
+  using ((select public.is_admin()));
 
 drop policy if exists "Admins can add members" on public.members;
 create policy "Admins can add members"
@@ -121,9 +126,10 @@ create policy "Admins can update members"
   with check ((select public.is_admin()));
 
 drop policy if exists "Authenticated users can read fund entries" on public.ledger_entries;
-create policy "Authenticated users can read fund entries"
+drop policy if exists "Admins can read fund entries" on public.ledger_entries;
+create policy "Admins can read fund entries"
   on public.ledger_entries for select to authenticated
-  using ((select public.is_member()));
+  using ((select public.is_admin()));
 
 drop policy if exists "Admins can add fund entries" on public.ledger_entries;
 create policy "Admins can add fund entries"
@@ -135,11 +141,59 @@ create policy "Admins can delete fund entries"
   on public.ledger_entries for delete to authenticated
   using ((select public.is_admin()));
 
+create or replace function public.get_fund_overview(p_month date)
+returns table (
+  active_members integer,
+  monthly_total numeric,
+  event_total numeric,
+  monthly_paid_members integer,
+  total_contributions numeric,
+  total_events numeric,
+  total_expenses numeric,
+  balance numeric
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_member() then
+    raise exception 'Fund access requires an approved member account'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select
+    (select count(*)::integer from public.members where is_active),
+    coalesce(sum(e.amount) filter (
+      where e.entry_type = 'monthly'
+        and e.period_month = date_trunc('month', p_month)::date
+    ), 0),
+    coalesce(sum(e.amount) filter (
+      where e.entry_type = 'event'
+        and date_trunc('month', e.entry_date)::date = date_trunc('month', p_month)::date
+    ), 0),
+    (count(distinct e.member_id) filter (
+      where e.entry_type = 'monthly'
+        and e.period_month = date_trunc('month', p_month)::date
+    ))::integer,
+    coalesce(sum(e.amount) filter (where e.entry_type = 'monthly'), 0),
+    coalesce(sum(e.amount) filter (where e.entry_type = 'event'), 0),
+    coalesce(sum(e.amount) filter (where e.entry_type = 'expense'), 0),
+    coalesce(sum(e.amount) filter (where e.entry_type <> 'expense'), 0)
+      - coalesce(sum(e.amount) filter (where e.entry_type = 'expense'), 0)
+  from public.ledger_entries e;
+end;
+$$;
+
 grant usage on schema public to authenticated;
 grant select on public.profiles to authenticated;
 grant select, insert, update on public.members to authenticated;
 grant select, insert, delete on public.ledger_entries to authenticated;
 revoke all on function public.is_admin() from public, anon;
 revoke all on function public.is_member() from public, anon;
+revoke all on function public.get_fund_overview(date) from public, anon;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_member() to authenticated;
+grant execute on function public.get_fund_overview(date) to authenticated;

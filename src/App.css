@@ -310,6 +310,7 @@
 .page-footer { display: flex; align-items: center; gap: 10px; max-width: 1400px; width: 100%; margin: auto auto 0; padding: 14px 42px 18px; color: #a0a7a2; font-size: 9px; }
 .page-footer > span:first-child { color: #718078; font: 700 10px var(--sans-heading); }
 .page-footer > span:nth-child(2) { padding-left: 10px; border-left: 1px solid #dfe4df; }
+.creator-tag { padding: 4px 7px; border: 1px solid #e6ebe7; border-radius: 999px; color: #89938c; font-size: 8px; }
 .footer-settings { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 0; border: 0; color: #929b95; background: transparent; font-size: 9px; }
 
 .contribution-summary, .transaction-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 15px; border: 1px solid #e9ede9; border-radius: 10px; background: #fff; }

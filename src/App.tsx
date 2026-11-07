@@ -48,6 +48,17 @@ type LedgerEntry = {
   created_at: string
 }
 
+type FundOverviewSummary = {
+  active_members: number
+  monthly_total: number
+  event_total: number
+  monthly_paid_members: number
+  total_contributions: number
+  total_events: number
+  total_expenses: number
+  balance: number
+}
+
 type EntryDraft = {
   entry_type: EntryType
   amount: number
@@ -247,6 +258,7 @@ function FundWorkspace({
   const [role, setRole] = useState<AppRole | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [entries, setEntries] = useState<LedgerEntry[]>([])
+  const [viewerSummary, setViewerSummary] = useState<FundOverviewSummary | null>(null)
   const [month, setMonth] = useState(currentMonth())
   const [tab, setTab] = useState<Tab>('overview')
   const [loading, setLoading] = useState(true)
@@ -273,6 +285,23 @@ function FundWorkspace({
     }
     if (profileResult.data.role === 'pending') {
       setRole('pending')
+      setMembers([])
+      setEntries([])
+      setError('')
+      setLoading(false)
+      return
+    }
+    if (profileResult.data.role === 'viewer') {
+      const summaryResult = await client
+        .rpc('get_fund_overview', { p_month: `${month}-01` })
+        .single()
+      if (summaryResult.error) {
+        setError(summaryResult.error.message)
+        setLoading(false)
+        return
+      }
+      setRole('viewer')
+      setViewerSummary(summaryResult.data)
       setMembers([])
       setEntries([])
       setError('')
@@ -306,7 +335,7 @@ function FundWorkspace({
     setEntries(allEntries)
     setError('')
     setLoading(false)
-  }, [client])
+  }, [client, month])
 
   useEffect(() => {
     void Promise.resolve().then(() => loadData(session.user.id))
@@ -425,12 +454,13 @@ function FundWorkspace({
     setModal('entry')
   }
 
-  const navItems: { key: Tab; label: string; icon: ReactNode }[] = [
+  const allNavItems: { key: Tab; label: string; icon: ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <Wallet size={18} /> },
     { key: 'contributions', label: 'Contributions', icon: <Coins size={18} /> },
     { key: 'members', label: 'Members', icon: <Users size={18} /> },
     { key: 'transactions', label: 'Transactions', icon: <ArrowDownLeft size={18} /> },
   ]
+  const navItems = isAdmin ? allNavItems : allNavItems.slice(0, 1)
 
   if (loading) {
     return <main className="loading-screen"><span className="spinner" /><p>Loading your fund records…</p></main>
@@ -491,7 +521,9 @@ function FundWorkspace({
 
         <div className="page-content">
           {error && <div className="error-banner" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError('')}><X size={16} /></button></div>}
-          {tab === 'overview' && (
+          {role === 'viewer' ? viewerSummary && (
+            <ViewerOverview summary={viewerSummary} month={month} setMonth={setMonth} />
+          ) : tab === 'overview' && (
             <Overview
               month={month}
               setMonth={setMonth}
@@ -512,7 +544,7 @@ function FundWorkspace({
               onDelete={deleteEntry}
             />
           )}
-          {tab === 'contributions' && (
+          {role !== 'viewer' && tab === 'contributions' && (
             <Contributions
               month={month}
               setMonth={setMonth}
@@ -525,7 +557,7 @@ function FundWorkspace({
               onDelete={deleteEntry}
             />
           )}
-          {tab === 'members' && (
+          {role !== 'viewer' && tab === 'members' && (
             <MembersView
               members={members}
               entries={entries}
@@ -537,7 +569,7 @@ function FundWorkspace({
               onToggle={toggleMember}
             />
           )}
-          {tab === 'transactions' && (
+          {role !== 'viewer' && tab === 'transactions' && (
             <Transactions
               entries={entries}
               members={members}
@@ -549,7 +581,7 @@ function FundWorkspace({
             />
           )}
         </div>
-        <footer className="page-footer"><span>Batchfund</span><span>Built for your batch, kept in balance.</span><button className="footer-settings" title="Shared, secure workspace"><Settings2 size={15} />Secure workspace</button></footer>
+        <footer className="page-footer"><span>Batchfund</span><span>Built for your batch, kept in balance.</span><span className="creator-tag">Created by nethulguy@gmail.com</span><button className="footer-settings" title="Shared, secure workspace"><Settings2 size={15} />Secure workspace</button></footer>
       </main>
       {mobileNavOpen && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
       {modal === 'member' && <MemberDialog members={members} busy={saving} onClose={() => setModal(null)} onSubmit={addMember} />}
@@ -654,6 +686,70 @@ function Overview({
             ))}
           </div>
         )}
+      </section>
+    </>
+  )
+}
+
+function ViewerOverview({
+  summary,
+  month,
+  setMonth,
+}: {
+  summary: FundOverviewSummary
+  month: string
+  setMonth: (value: string) => void
+}) {
+  const monthlyTarget = summary.active_members * MONTHLY_CONTRIBUTION
+  const progress = monthlyTarget
+    ? Math.min(100, Math.round((summary.monthly_total / monthlyTarget) * 100))
+    : 0
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="YOUR BATCH AT A GLANCE"
+        title="Fund overview"
+        detail="View shared fund totals and basic batch status."
+        action={<MonthPicker month={month} setMonth={setMonth} />}
+      />
+      <section className="stat-grid" aria-label="Fund summary">
+        <article className="stat-card balance-card">
+          <div className="stat-top"><span className="stat-label">Available balance</span><span className="stat-icon mint-icon"><Wallet size={17} /></span></div>
+          <strong className="stat-value">{money.format(summary.balance)}</strong>
+          <div className="stat-foot"><span className="balance-indicator"><i /> Live shared balance</span><span className="stat-period">All time</span></div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-top"><span className="stat-label">Monthly contributions</span><span className="stat-icon lilac-icon"><Coins size={17} /></span></div>
+          <strong className="stat-value">{money.format(summary.monthly_total)}</strong>
+          <div className="stat-foot"><span>{summary.monthly_paid_members} contributions this month</span><span className="stat-period">{displayMonth(month)}</span></div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-top"><span className="stat-label">Event collections</span><span className="stat-icon peach-icon"><CalendarDays size={17} /></span></div>
+          <strong className="stat-value">{money.format(summary.event_total)}</strong>
+          <div className="stat-foot"><span>Included in available balance</span><span className="stat-period">{displayMonth(month)}</span></div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-top"><span className="stat-label">Active members</span><span className="stat-icon blue-icon"><Users size={17} /></span></div>
+          <strong className="stat-value">{summary.active_members}<small> / 220</small></strong>
+          <div className="stat-foot"><span>Registration numbers 1–220</span><span className="stat-period">Batch total</span></div>
+        </article>
+      </section>
+      <section className="overview-grid">
+        <article className="panel collection-panel">
+          <div className="panel-heading"><div><span className="eyebrow">MONTHLY COLLECTION</span><h2>{displayMonth(month)}</h2></div></div>
+          <div className="collection-total"><strong>{money.format(summary.monthly_total)}</strong><span>of {money.format(monthlyTarget)} target</span></div>
+          <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
+          <div className="progress-meta"><span><i className="legend-dot green-dot" />{summary.monthly_paid_members} contributions</span><span><i className="legend-dot gray-dot" />{Math.max(0, summary.active_members - summary.monthly_paid_members)} remaining</span><strong>{progress}%</strong></div>
+        </article>
+        <article className="panel breakdown-panel">
+          <div className="panel-heading"><div><span className="eyebrow">FUND BREAKDOWN</span><h2>Where things stand</h2></div><span className="period-pill">All time</span></div>
+          <div className="breakdown-row"><span className="breakdown-symbol income-symbol"><ArrowDownLeft size={15} /></span><span className="breakdown-name">Monthly contributions</span><strong>{money.format(summary.total_contributions)}</strong></div>
+          <div className="breakdown-row"><span className="breakdown-symbol event-symbol"><CalendarDays size={15} /></span><span className="breakdown-name">Event collections</span><strong>{money.format(summary.total_events)}</strong></div>
+          <div className="breakdown-row"><span className="breakdown-symbol expense-symbol"><ArrowUpRight size={15} /></span><span className="breakdown-name">Expenses &amp; withdrawals</span><strong className="expense-number">− {money.format(summary.total_expenses)}</strong></div>
+          <div className="breakdown-divider" />
+          <div className="breakdown-total"><span>Available balance</span><strong>{money.format(summary.balance)}</strong></div>
+        </article>
       </section>
     </>
   )

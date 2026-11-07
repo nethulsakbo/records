@@ -30,15 +30,7 @@ Without Supabase environment variables, the app displays a setup screen instead 
    where email = 'your-email@example.com';
    ```
 
-5. Promote other approved batch members to viewers as they create accounts:
-
-   ```sql
-   update public.profiles
-   set role = 'viewer'
-   where email = 'member-email@example.com';
-   ```
-
-New accounts start in a pending state and cannot see any fund data until an admin approves them. Admins manage the member directory and all fund records.
+New accounts automatically join as viewers after signing up and confirming their email. Viewers can see the fund overview totals only; admins can access member details, contributions, and transactions and manage all fund records. Running the schema on an existing project also changes pending profiles to viewers. To promote an account to admin, use the SQL above.
 
 Supabase email confirmation may need to be enabled or configured for your group under **Authentication → Providers / URL Configuration**. For production, set your deployed Vercel domain as the site URL and redirect URL.
 
@@ -60,8 +52,8 @@ Import the repository into Vercel and add `VITE_SUPABASE_URL` and `VITE_SUPABASE
 - Members have unique registration numbers from 1 through 220. Archiving a member preserves their earlier transactions and keeps their registration number reserved.
 - The default monthly contribution is LKR 500. Admins can adjust a recorded amount if needed; only one monthly payment per member and month is allowed.
 - Event collections are a separate ledger category and are included in the overall available balance. Expenses and withdrawals reduce the balance.
-- Every signed-in user can view the shared records. Admins can add/archive members, record contributions and transactions, and delete an incorrect transaction.
-- Row-level security in Supabase enforces the same viewer/admin distinction; it does not rely only on the app interface.
+- Viewers can see aggregate fund totals only. Admins can view full records, add/archive members, record contributions and transactions, and delete an incorrect transaction.
+- Row-level security and a restricted summary function enforce the viewer/admin distinction in Supabase; it does not rely only on the app interface.
 
 ## Checks
 
