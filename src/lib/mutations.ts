@@ -32,6 +32,17 @@ export function setMemberActive(
   return client.from('members').update({ is_active: isActive }).eq('id', memberId)
 }
 
+export function approveUser(
+  client: SupabaseClient<Database>,
+  userId: string,
+  registrationNumber?: number,
+) {
+  return client.from('profiles').update({
+    role: 'viewer',
+    ...(registrationNumber === undefined ? {} : { registration_number: registrationNumber }),
+  }).eq('id', userId)
+}
+
 export function removeLedgerEntry(client: SupabaseClient<Database>, entryId: string) {
   return client.from('ledger_entries').delete().eq('id', entryId)
 }

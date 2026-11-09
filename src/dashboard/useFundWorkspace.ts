@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { AppRole, EntryType } from '../lib/database.types'
-import type { Member, LedgerEntry, FundOverviewSummary, EntryDraft, Tab, TransactionFilter } from '../lib/types'
+import type { Member, LedgerEntry, FundOverviewSummary, EntryDraft, PendingUser, Tab, TransactionFilter } from '../lib/types'
 import { MONTHLY_CONTRIBUTION, currentMonth, today } from '../lib/formatters'
 import { loadWorkspaceData } from '../lib/queries'
-import { createMember, recordLedgerEntry, removeLedgerEntry, setMemberActive } from '../lib/mutations'
+import { approveUser as approveUserMutation, createMember, recordLedgerEntry, removeLedgerEntry, setMemberActive } from '../lib/mutations'
 
 export function useFundWorkspace(client: NonNullable<typeof supabase>, session: Session) {
   const [role, setRole] = useState<AppRole | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [entries, setEntries] = useState<LedgerEntry[]>([])
+  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [viewerSummary, setViewerSummary] = useState<FundOverviewSummary | null>(null)
   const [month, setMonth] = useState(currentMonth())
   const [tab, setTab] = useState<Tab>('overview')
@@ -35,6 +36,7 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
       setRole('pending')
       setMembers([])
       setEntries([])
+      setPendingUsers([])
       setError('')
       setLoading(false)
       return
@@ -44,6 +46,7 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
       setViewerSummary(result.summary)
       setMembers([])
       setEntries([])
+      setPendingUsers([])
       setError('')
       setLoading(false)
       return
@@ -51,6 +54,7 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
     setRole(result.role)
     setMembers(result.members)
     setEntries(result.entries)
+    setPendingUsers(result.pendingUsers)
     setError('')
     setLoading(false)
   }, [client, month])
@@ -136,6 +140,18 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
     if (action === 'restore') setError('')
   }
 
+  async function approveUser(user: PendingUser, registrationNumber?: number) {
+    setError('')
+    const { error: approvalError } = await approveUserMutation(client, user.id, registrationNumber)
+    if (approvalError) {
+      setError(approvalError.code === '23505'
+        ? `Registration number ${user.registration_number ?? ''} is already assigned to an approved account.`
+        : approvalError.message)
+      return
+    }
+    await loadData(session.user.id)
+  }
+
   async function deleteEntry(entry: LedgerEntry) {
     if (!window.confirm('Delete this transaction? This cannot be undone.')) return
     setError('')
@@ -164,11 +180,11 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
   }
 
   return {
-    role, members, entries, viewerSummary, month, setMonth, tab, setTab, loading, setLoading,
+    role, members, entries, pendingUsers, viewerSummary, month, setMonth, tab, setTab, loading, setLoading,
     error, setError, modal, setModal, entryDefaults, saving, search, setSearch,
     transactionFilter, setTransactionFilter, mobileNavOpen, setMobileNavOpen, isAdmin,
     loadData, activeMembers, monthEntries, monthlyTotal, eventTotal, balance, paidCount,
-    dueCount, monthlyTarget, progress, recordEntry, addMember, toggleMember, deleteEntry,
+    dueCount, monthlyTarget, progress, recordEntry, addMember, toggleMember, approveUser, deleteEntry,
     signOut, openEntry,
   }
 }

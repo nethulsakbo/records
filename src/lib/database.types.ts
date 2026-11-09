@@ -8,18 +8,21 @@ export type Database = {
         Row: {
           id: string
           email: string
+          registration_number: number | null
           role: AppRole
           created_at: string
         }
         Insert: {
           id: string
           email: string
+          registration_number?: number | null
           role?: AppRole
           created_at?: string
         }
         Update: {
           id?: string
           email?: string
+          registration_number?: number | null
           role?: AppRole
           created_at?: string
         }

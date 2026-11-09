@@ -75,6 +75,7 @@ export function AuthScreen({
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [registrationNumber, setRegistrationNumber] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -84,7 +85,11 @@ export function AuthScreen({
     setError('')
     setNotice('')
     const result = isSignUp
-      ? await client.auth.signUp({ email, password })
+      ? await client.auth.signUp({
+        email,
+        password,
+        options: { data: { registration_number: Number(registrationNumber) } },
+      })
       : await client.auth.signInWithPassword({ email, password })
     setBusy(false)
     if (result.error) {
@@ -92,7 +97,7 @@ export function AuthScreen({
       return
     }
     if (isSignUp && !result.data.session) {
-      setNotice('Check your email to confirm your account, then sign in here.')
+      setNotice('Check your email to confirm your account. An administrator must approve your registration number before you can enter.')
     }
   }
 
@@ -116,6 +121,7 @@ export function AuthScreen({
           <h1>{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
           <p className="auth-subtitle">{isSignUp ? 'Join your batch’s shared fund workspace.' : 'Sign in to see how your batch fund is doing.'}</p>
           <form onSubmit={submit} className="auth-form">
+            {isSignUp && <label>Registration number<input type="number" min="1" max="220" step="1" value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} placeholder="1–220" required /></label>}
             <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></label>
             <label>Password<input type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" required /></label>
             {error && <div className="form-alert" role="alert">{error}</div>}
@@ -123,7 +129,7 @@ export function AuthScreen({
             <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isSignUp ? 'Create account' : 'Sign in'}<ArrowUpRight size={17} /></button>
           </form>
           <p className="auth-toggle">{isSignUp ? 'Already have an account?' : 'New to the workspace?'} <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setNotice('') }}>{isSignUp ? 'Sign in' : 'Create an account'}</button></p>
-          <div className="auth-privacy"><ShieldCheck size={16} /><span>Access is limited to approved batch members.</span></div>
+          <div className="auth-privacy"><ShieldCheck size={16} /><span>New accounts need administrator approval.</span></div>
         </div>
         <span className="auth-mobile-footer">UNIVERSITY BATCH FUND · LKR</span>
       </section>

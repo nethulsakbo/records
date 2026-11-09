@@ -15,6 +15,7 @@ Without Supabase environment variables, the app displays a setup screen instead 
 
 1. Create a Supabase project.
 2. In **SQL Editor**, run [`supabase/schema.sql`](./supabase/schema.sql).
+   If you already have a project, run the schema again to add registration-number approval support; existing account roles are preserved.
 3. In **Project Settings → API**, copy the Project URL and the public anon key into `.env.local`:
 
    ```dotenv
@@ -22,7 +23,7 @@ Without Supabase environment variables, the app displays a setup screen instead 
    VITE_SUPABASE_ANON_KEY=your-public-anon-key
    ```
 
-4. Start the app and create your first account. In Supabase **SQL Editor**, promote that account to admin:
+4. Start the app and create your first account using a registration number from 1–220. After confirming the email, promote that first account to admin in Supabase **SQL Editor**:
 
    ```sql
    update public.profiles
@@ -30,7 +31,7 @@ Without Supabase environment variables, the app displays a setup screen instead 
    where email = 'your-email@example.com';
    ```
 
-New accounts automatically join as viewers after signing up and confirming their email. Viewers can see the fund overview totals only; admins can access member details, contributions, and transactions and manage all fund records. Running the schema on an existing project also changes pending profiles to viewers. To promote an account to admin, use the SQL above.
+New accounts remain locked until an administrator approves them. Admins can open **Approvals** to compare each submitted registration number with the active member directory and approve the request; add the member to the directory first if needed. Approved accounts can see fund overview totals; admins can access member details, contributions, transactions, approvals, and manage fund records. The first admin must be promoted with the SQL above before adding the member directory. Existing accounts keep their current role when this schema is applied.
 
 Supabase email confirmation may need to be enabled or configured for your group under **Authentication → Providers / URL Configuration**. For production, set your deployed Vercel domain as the site URL and redirect URL.
 

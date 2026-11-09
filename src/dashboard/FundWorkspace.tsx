@@ -1,4 +1,4 @@
-import { ArrowDownLeft, BadgeCheck, ChevronDown, Clock3, Coins, LogOut, Menu, Plus, Settings2, ShieldCheck, Users, Wallet, X } from 'lucide-react'
+import { ArrowDownLeft, BadgeCheck, ChevronDown, Clock3, Coins, LogOut, Menu, Plus, Settings2, ShieldCheck, Users, Wallet, X, UserRoundCheck } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
@@ -7,6 +7,7 @@ import { useFundWorkspace } from './useFundWorkspace'
 import { Overview, ViewerOverview } from './Overview'
 import { MembersView, MemberDialog } from '../members/MembersView'
 import { Contributions, Transactions, EntryDialog } from '../transactions/Transactions'
+import { ApprovalsView } from '../admin/ApprovalsView'
 
 export function FundWorkspace({
   client,
@@ -16,12 +17,12 @@ export function FundWorkspace({
   session: Session
 }) {
   const {
-    role, members, entries, viewerSummary, month, setMonth, tab, setTab, loading, setLoading,
+    role, members, entries, pendingUsers, viewerSummary, month, setMonth, tab, setTab, loading, setLoading,
     error, setError, modal, setModal, entryDefaults, saving, search, setSearch,
     transactionFilter, setTransactionFilter, mobileNavOpen, setMobileNavOpen, isAdmin,
     loadData, activeMembers, monthEntries, monthlyTotal, eventTotal, balance, paidCount,
     dueCount, monthlyTarget, progress, recordEntry, addMember, toggleMember, deleteEntry,
-    signOut, openEntry,
+    signOut, openEntry, approveUser,
   } = useFundWorkspace(client, session)
 
   const allNavItems: { key: Tab; label: string; icon: ReactNode }[] = [
@@ -29,6 +30,7 @@ export function FundWorkspace({
     { key: 'contributions', label: 'Contributions', icon: <Coins size={18} /> },
     { key: 'members', label: 'Members', icon: <Users size={18} /> },
     { key: 'transactions', label: 'Transactions', icon: <ArrowDownLeft size={18} /> },
+    { key: 'approvals', label: 'Approvals', icon: <UserRoundCheck size={18} /> },
   ]
   const navItems = isAdmin ? allNavItems : allNavItems.slice(0, 1)
 
@@ -67,7 +69,7 @@ export function FundWorkspace({
         <nav className="main-nav" aria-label="Main navigation">
           {navItems.map((item) => (
             <button key={item.key} className={`nav-item ${tab === item.key ? 'nav-item-active' : ''}`} onClick={() => { setTab(item.key); setMobileNavOpen(false) }}>
-              {item.icon}<span>{item.label}</span>{item.key === 'contributions' && <span className="nav-count">{dueCount}</span>}
+              {item.icon}<span>{item.label}</span>{item.key === 'contributions' && <span className="nav-count">{dueCount}</span>}{item.key === 'approvals' && pendingUsers.length > 0 && <span className="nav-count">{pendingUsers.length}</span>}
             </button>
           ))}
         </nav>
@@ -149,6 +151,9 @@ export function FundWorkspace({
               onAdd={openEntry}
               onDelete={deleteEntry}
             />
+          )}
+          {role === 'admin' && tab === 'approvals' && (
+            <ApprovalsView pendingUsers={pendingUsers} members={members} onApprove={approveUser} />
           )}
         </div>
         <footer className="page-footer"><span>Batchfund</span><span>Built for your batch, kept in balance.</span><span className="creator-tag">Created by nethulguy@gmail.com</span><button className="footer-settings" title="Shared, secure workspace"><Settings2 size={15} />Secure workspace</button></footer>

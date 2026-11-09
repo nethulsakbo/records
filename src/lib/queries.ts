@@ -1,12 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AppRole, Database } from './database.types'
-import type { FundOverviewSummary, LedgerEntry, Member } from './types'
+import type { FundOverviewSummary, LedgerEntry, Member, PendingUser } from './types'
 
 type WorkspaceData =
   | { kind: 'error'; message: string }
   | { kind: 'pending' }
   | { kind: 'viewer'; summary: FundOverviewSummary }
-  | { kind: 'member'; role: AppRole; members: Member[]; entries: LedgerEntry[] }
+  | { kind: 'member'; role: AppRole; members: Member[]; entries: LedgerEntry[]; pendingUsers: PendingUser[] }
 
 export async function loadWorkspaceData(
   client: SupabaseClient<Database>,
@@ -34,6 +34,13 @@ export async function loadWorkspaceData(
   const memberResult = await client.from('members').select('*').order('registration_number')
   if (memberResult.error) return { kind: 'error', message: memberResult.error.message }
 
+  const pendingResult = await client
+    .from('profiles')
+    .select('id, email, registration_number, created_at')
+    .eq('role', 'pending')
+    .order('created_at')
+  if (pendingResult.error) return { kind: 'error', message: pendingResult.error.message }
+
   const entries: LedgerEntry[] = []
   for (let offset = 0; ; offset += 1000) {
     const entryResult = await client
@@ -53,5 +60,6 @@ export async function loadWorkspaceData(
     role: profileResult.data.role,
     members: memberResult.data,
     entries,
+    pendingUsers: pendingResult.data,
   }
 }

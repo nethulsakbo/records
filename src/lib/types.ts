@@ -8,6 +8,13 @@ export type Member = {
   created_at: string
 }
 
+export type PendingUser = {
+  id: string
+  email: string
+  registration_number: number | null
+  created_at: string
+}
+
 export type LedgerEntry = {
   id: string
   entry_type: EntryType
@@ -42,6 +49,6 @@ export type EntryDraft = {
   entry_date: string
 }
 
-export type Tab = 'overview' | 'contributions' | 'members' | 'transactions'
+export type Tab = 'overview' | 'contributions' | 'members' | 'transactions' | 'approvals'
 
 export type TransactionFilter = 'all' | 'event' | 'expense'
