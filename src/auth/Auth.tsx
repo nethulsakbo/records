@@ -35,6 +35,9 @@ export function ConnectedApp({ client }: { client: NonNullable<typeof supabase> 
   const [session, setSession] = useState<Session | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
+  const [passwordRecovery, setPasswordRecovery] = useState(() => (
+    new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery'
+  ))
 
   useEffect(() => {
     let active = true
@@ -44,9 +47,10 @@ export function ConnectedApp({ client }: { client: NonNullable<typeof supabase> 
       setSession(data.session)
       setAuthLoading(false)
     })
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
       setAuthError('')
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
     })
     return () => {
       active = false
@@ -56,6 +60,9 @@ export function ConnectedApp({ client }: { client: NonNullable<typeof supabase> 
 
   if (authLoading) {
     return <main className="loading-screen"><span className="spinner" /><p>Connecting to your fund…</p></main>
+  }
+  if (passwordRecovery) {
+    return <PasswordRecoveryScreen client={client} onComplete={() => setPasswordRecovery(false)} />
   }
   if (!session) {
     return <AuthScreen client={client} error={authError} setError={setAuthError} />
@@ -75,7 +82,7 @@ export function AuthScreen({
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [registrationNumber, setRegistrationNumber] = useState('')
+  const [isForgotPassword, setIsForgotPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -84,11 +91,24 @@ export function AuthScreen({
     setBusy(true)
     setError('')
     setNotice('')
+    if (isForgotPassword) {
+      const { error: resetError } = await client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      })
+      setBusy(false)
+      if (resetError) {
+        setError(readableAuthError(resetError.message))
+        return
+      }
+      setNotice('If an account exists for this email, a password reset link is on its way.')
+      return
+    }
+
     const result = isSignUp
       ? await client.auth.signUp({
         email,
         password,
-        options: { data: { registration_number: Number(registrationNumber) } },
+        options: { emailRedirectTo: window.location.origin },
       })
       : await client.auth.signInWithPassword({ email, password })
     setBusy(false)
@@ -97,9 +117,15 @@ export function AuthScreen({
       return
     }
     if (isSignUp && !result.data.session) {
-      setNotice('Check your email to confirm your account. An administrator must approve your registration number before you can enter.')
+      setNotice('Check your email to confirm your account. You can sign in as soon as it is confirmed.')
     }
   }
+
+  const title = isForgotPassword
+    ? 'Reset your password'
+    : isSignUp
+      ? 'Create your account'
+      : 'Welcome back'
 
   return (
     <main className="auth-page">
@@ -118,20 +144,78 @@ export function AuthScreen({
         <div className="mobile-brand brand-lockup"><span className="brand-mark"><Wallet size={21} /></span><span>Batch<span className="brand-light">fund</span></span></div>
         <div className="auth-form-wrap">
           <span className="eyebrow">UNIVERSITY BATCH FUND</span>
-          <h1>{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
-          <p className="auth-subtitle">{isSignUp ? 'Join your batch’s shared fund workspace.' : 'Sign in to see how your batch fund is doing.'}</p>
+          <h1>{title}</h1>
+          <p className="auth-subtitle">
+            {isForgotPassword
+              ? 'Enter your account email and we’ll send you a password reset link.'
+              : isSignUp
+                ? 'Join your batch’s shared fund workspace.'
+                : 'Sign in to see how your batch fund is doing.'}
+          </p>
           <form onSubmit={submit} className="auth-form">
-            {isSignUp && <label>Registration number<input type="number" min="1" max="220" step="1" value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} placeholder="1–220" required /></label>}
             <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></label>
-            <label>Password<input type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" required /></label>
+            {!isForgotPassword && <label>Password<input type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" required /></label>}
             {error && <div className="form-alert" role="alert">{error}</div>}
             {notice && <div className="form-success" role="status">{notice}</div>}
-            <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isSignUp ? 'Create account' : 'Sign in'}<ArrowUpRight size={17} /></button>
+            <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isForgotPassword ? 'Send reset link' : isSignUp ? 'Create account' : 'Sign in'}<ArrowUpRight size={17} /></button>
           </form>
-          <p className="auth-toggle">{isSignUp ? 'Already have an account?' : 'New to the workspace?'} <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setNotice('') }}>{isSignUp ? 'Sign in' : 'Create an account'}</button></p>
-          <div className="auth-privacy"><ShieldCheck size={16} /><span>New accounts need administrator approval.</span></div>
+          {isForgotPassword
+            ? <p className="auth-toggle"><button type="button" onClick={() => { setIsForgotPassword(false); setError(''); setNotice('') }}>Back to sign in</button></p>
+            : <>
+              {!isSignUp && <p className="auth-toggle"><button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setNotice('') }}>Forgot password?</button></p>}
+              <p className="auth-toggle">{isSignUp ? 'Already have an account?' : 'New to the workspace?'} <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setNotice('') }}>{isSignUp ? 'Sign in' : 'Create an account'}</button></p>
+            </>}
+          <div className="auth-privacy"><ShieldCheck size={16} /><span>Confirm your email to access the shared fund summary.</span></div>
         </div>
         <span className="auth-mobile-footer">UNIVERSITY BATCH FUND · LKR</span>
+      </section>
+    </main>
+  )
+}
+
+function PasswordRecoveryScreen({
+  client,
+  onComplete,
+}: {
+  client: NonNullable<typeof supabase>
+  onComplete: () => void
+}) {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    if (password !== confirmPassword) {
+      setError('The passwords do not match.')
+      return
+    }
+    setBusy(true)
+    const { error: updateError } = await client.auth.updateUser({ password })
+    setBusy(false)
+    if (updateError) {
+      setError(readableAuthError(updateError.message))
+      return
+    }
+    onComplete()
+  }
+
+  return (
+    <main className="auth-page auth-recovery-page">
+      <section className="auth-main">
+        <div className="auth-form-wrap">
+          <span className="eyebrow">UNIVERSITY BATCH FUND</span>
+          <h1>Choose a new password</h1>
+          <p className="auth-subtitle">Set a new password for your account.</p>
+          <form onSubmit={submit} className="auth-form">
+            <label>New password<input type="password" autoComplete="new-password" minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" required /></label>
+            <label>Confirm password<input type="password" autoComplete="new-password" minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Enter your new password again" required /></label>
+            {error && <div className="form-alert" role="alert">{error}</div>}
+            <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : 'Update password'}<ArrowUpRight size={17} /></button>
+          </form>
+        </div>
       </section>
     </main>
   )

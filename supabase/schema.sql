@@ -2,16 +2,30 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null,
   registration_number integer check (registration_number between 1 and 220),
-  role text not null default 'pending' check (role in ('admin', 'viewer', 'pending')),
+  role text not null default 'viewer' check (role in ('admin', 'viewer', 'pending')),
   created_at timestamptz not null default now()
 );
 
 alter table public.profiles add column if not exists registration_number integer check (registration_number between 1 and 220);
-alter table public.profiles alter column role set default 'pending';
+alter table public.profiles alter column role set default 'viewer';
 
 create unique index if not exists profiles_approved_registration_number_idx
   on public.profiles (registration_number)
   where registration_number is not null and role in ('admin', 'viewer');
+
+drop trigger if exists validate_profile_approval on public.profiles;
+drop function if exists public.validate_profile_approval();
+
+update public.profiles
+set role = 'viewer',
+    registration_number = null
+where role = 'pending';
+
+insert into public.profiles (id, email, role)
+select users.id, coalesce(users.email, ''), 'viewer'
+from auth.users as users
+left join public.profiles as profiles on profiles.id = users.id
+where profiles.id is null;
 
 create table if not exists public.members (
   id uuid primary key default gen_random_uuid(),
@@ -90,50 +104,13 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  registration_text text;
-  registration_number_value integer;
 begin
-  registration_text := new.raw_user_meta_data ->> 'registration_number';
-  if registration_text is null or registration_text !~ '^[0-9]{1,3}$' then
-    raise exception 'Enter a registration number between 1 and 220';
-  end if;
-  registration_number_value := registration_text::integer;
-  if registration_number_value not between 1 and 220 then
-    raise exception 'Enter a registration number between 1 and 220';
-  end if;
-
-  insert into public.profiles (id, email, registration_number, role)
-  values (new.id, coalesce(new.email, ''), registration_number_value, 'pending')
+  insert into public.profiles (id, email, role)
+  values (new.id, coalesce(new.email, ''), 'viewer')
   on conflict (id) do update set email = excluded.email;
   return new;
 end;
 $$;
-
-create or replace function public.validate_profile_approval()
-returns trigger
-language plpgsql
-set search_path = public
-as $$
-begin
-  if old.role = 'pending' and new.role = 'viewer' and not exists (
-    select 1
-    from public.members
-    where registration_number = new.registration_number
-      and is_active
-  ) then
-    raise exception 'Add an active member with registration number % before approving this account.',
-      coalesce(new.registration_number::text, '(missing)')
-      using errcode = '23514';
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists validate_profile_approval on public.profiles;
-create trigger validate_profile_approval
-  before update of role on public.profiles
-  for each row execute procedure public.validate_profile_approval();
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

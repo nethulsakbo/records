@@ -452,6 +452,8 @@
 .setup-footer { margin: 17px 0 0; color: #939b96; font-size: 9px; line-height: 1.5; }
 
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: 48% 52%; background: #fff; }
+.auth-recovery-page { grid-template-columns: 1fr; }
+.auth-recovery-page .auth-main { min-height: 100vh; }
 .auth-aside { min-height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 29px 39px; color: #f4f8f5; background: #19382f; }
 .auth-aside .brand-lockup { padding: 0; }
 .auth-aside .brand-light { color: #9ab2a4; }

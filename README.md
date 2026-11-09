@@ -15,7 +15,7 @@ Without Supabase environment variables, the app displays a setup screen instead 
 
 1. Create a Supabase project.
 2. In **SQL Editor**, run [`supabase/schema.sql`](./supabase/schema.sql).
-   If you already have a project, run the schema again to add registration-number approval support; existing account roles are preserved.
+   If you already have a project, run the schema again to make existing pending accounts viewers and give any auth accounts without profiles a viewer profile. Existing admins and viewers keep their roles.
 3. In **Project Settings → API**, copy the Project URL and the public anon key into `.env.local`:
 
    ```dotenv
@@ -23,7 +23,7 @@ Without Supabase environment variables, the app displays a setup screen instead 
    VITE_SUPABASE_ANON_KEY=your-public-anon-key
    ```
 
-4. Start the app and create your first account using a registration number from 1–220. After confirming the email, promote that first account to admin in Supabase **SQL Editor**:
+4. Start the app and create your first account. After confirming the email, promote that account to admin in Supabase **SQL Editor**:
 
    ```sql
    update public.profiles
@@ -31,9 +31,11 @@ Without Supabase environment variables, the app displays a setup screen instead 
    where email = 'your-email@example.com';
    ```
 
-New accounts remain locked until an administrator approves them. Admins can open **Approvals** to compare each submitted registration number with the active member directory and approve the request; add the member to the directory first if needed. Approved accounts can see fund overview totals; admins can access member details, contributions, transactions, approvals, and manage fund records. The first admin must be promoted with the SQL above before adding the member directory. Existing accounts keep their current role when this schema is applied.
+New email-confirmed accounts automatically receive viewer access to the fund overview and do not need a registration number or administrator approval. Admins can access member details, contributions, transactions, approvals, and manage fund records. The first admin must be promoted with the SQL above before adding the member directory. The sign-in screen also has a password-reset flow for existing email accounts.
 
-Supabase email confirmation may need to be enabled or configured for your group under **Authentication → Providers / URL Configuration**. For production, set your deployed Vercel domain as the site URL and redirect URL.
+Enable email confirmation under **Supabase → Authentication → Providers**. In **Authentication → URL Configuration**, set the production app URL as the Site URL and allow that URL in Redirect URLs; the app sends confirmation and password-reset links back to its current origin.
+
+The app must be publicly reachable without a Vercel account. In **Vercel → Project Settings → Deployment Protection**, disable protection for the production deployment (or use an unprotected production domain). Vercel deployment protection runs before the app and cannot be bypassed by the app's sign-in code; Supabase email links to a protected deployment will show Vercel's login page.
 
 ### If sign-up says “Failed to fetch”
 
