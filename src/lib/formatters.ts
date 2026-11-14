@@ -35,7 +35,7 @@ export function displayName(entry: LedgerEntry, members: Member[]) {
 }
 export function readableAuthError(message: string) {
   if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
-    return 'Could not reach Supabase. Check that the project URL and public anon key are correct and from the same project, and that the project is active. After changing environment variables, restart the local dev server or redeploy on Vercel.'
+    return 'Could not reach Supabase. Check that the project URL and public publishable key are correct and from the same project, and that the project is active. After changing environment variables, restart the local dev server or redeploy on Vercel.'
   }
   return message
 }

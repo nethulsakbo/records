@@ -19,11 +19,11 @@ export function SetupScreen() {
         <ol className="setup-steps">
           <li><span>1</span><div><strong>Create a Supabase project</strong><small>Use the project your group will share.</small></div></li>
           <li><span>2</span><div><strong>Run the database setup</strong><small>Paste <code>supabase/schema.sql</code> into the SQL Editor and run it.</small></div></li>
-          <li><span>3</span><div><strong>Add environment variables</strong><small>Copy <code>.env.example</code> to <code>.env.local</code>, then fill in the project URL and anon key.</small></div></li>
+          <li><span>3</span><div><strong>Add environment variables</strong><small>Copy <code>.env.example</code> to <code>.env.local</code>, then fill in the project URL and publishable key.</small></div></li>
         </ol>
         <div className="setup-note">
           <ShieldCheck size={18} />
-          <p>Use only the public anon key in this app. Never put a Supabase service-role key in browser code.</p>
+          <p>Use only the public publishable key in this app. Never put a Supabase service-role key in browser code.</p>
         </div>
         <p className="setup-footer">Deploy the app to Vercel after setting the same variables in Project Settings → Environment Variables.</p>
       </div>

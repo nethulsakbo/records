@@ -16,11 +16,11 @@ Without Supabase environment variables, the app displays a setup screen instead 
 1. Create a Supabase project.
 2. In **SQL Editor**, run [`supabase/schema.sql`](./supabase/schema.sql).
    If you already have a project, run the schema again to make existing pending accounts viewers and give any auth accounts without profiles a viewer profile. Existing admins and viewers keep their roles.
-3. In **Project Settings → API**, copy the Project URL and the public anon key into `.env.local`:
+3. In **Project Settings → API**, copy the Project URL and the publishable key into `.env.local`:
 
    ```dotenv
    VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-public-anon-key
+   VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
    ```
 
 4. Start the app and create your first account. After confirming the email, promote that account to admin in Supabase **SQL Editor**:
@@ -41,14 +41,14 @@ The app must be publicly reachable without a Vercel account. In **Vercel → Pro
 
 This means the browser could not reach the Supabase Auth endpoint; it is not an invalid-password response. Check that:
 
-- `VITE_SUPABASE_URL` is the Project URL from the same Supabase project as `VITE_SUPABASE_ANON_KEY`. The URL should look like `https://<project-ref>.supabase.co`.
+- `VITE_SUPABASE_URL` is the Project URL from the same Supabase project as `VITE_SUPABASE_PUBLISHABLE_KEY`. The URL should look like `https://<project-ref>.supabase.co`.
 - The Supabase project is active and your browser can reach it.
 - After editing local `.env.local`, stop and restart `npm run dev`. After editing Vercel environment variables, redeploy the app.
-- The browser's Network panel shows the Auth request going to the expected Supabase project domain. Do not share the anon key or any service-role key when asking for help.
+- The browser's Network panel shows the Auth request going to the expected Supabase project domain. Do not share the publishable key or any service-role key when asking for help.
 
 ## Vercel deployment
 
-Import the repository into Vercel and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under **Project Settings → Environment Variables**. Redeploy after adding or changing them. Do not add a Supabase service-role key to Vercel client-side environment variables.
+Import the repository into Vercel and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` under **Project Settings → Environment Variables**. Redeploy after adding or changing them. Do not add a Supabase service-role key to Vercel client-side environment variables.
 
 ## Records and permissions
 
