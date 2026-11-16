@@ -52,11 +52,12 @@ Import the repository into Vercel and add `VITE_SUPABASE_URL` and `VITE_SUPABASE
 
 ## Records and permissions
 
-- Members have unique registration numbers from 1 through 220. Archiving a member preserves their earlier transactions and keeps their registration number reserved.
-- The default monthly contribution is LKR 500. Admins can adjust a recorded amount if needed; only one monthly payment per member and month is allowed.
-- Event collections are a separate ledger category and are included in the overall available balance. Expenses and withdrawals reduce the balance.
-- Viewers can see aggregate fund totals only. Admins can view full records, add/archive members, record contributions and transactions, and delete an incorrect transaction.
-- Row-level security and a restricted summary function enforce the viewer/admin distinction in Supabase; it does not rely only on the app interface.
+- **Normal User (Member) Dashboard**: Displays the member's personal payment record (whether they have paid or are pending for the selected month, lifetime payments, and contribution history) and transparent fund balance totals. Normal users cannot view other members' individual payment records or see who has not paid.
+- **Admin Visibility**: Only administrators can view the full roster of who has paid and who is unpaid, filter unpaid members with one click, and copy reminder lists.
+- **Site-managed Admin Roles**: Administrators can promote normal users to administrators and manage account roles directly from the site (User Roles & Admins tab).
+- **Member Approval Process**: New accounts provide their name and requested registration number (1–220) and await approval. Administrators can review, match, and accept or decline members directly from the site (Approvals tab).
+- **Events & Expenses**: Track batch occasions (trips, tournaments, gatherings) with custom targets, itemized collections, and expenses. Both normal users and admins can view events and their financial breakdowns; admins can add events and record collections/expenses.
+- Row-level security (RLS) in Supabase enforces that normal users can only query their own monthly contributions and all event records. Admins have access to the full ledger and directory.
 
 ## Checks
 

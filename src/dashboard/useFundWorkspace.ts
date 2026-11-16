@@ -2,16 +2,32 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { AppRole, EntryType } from '../lib/database.types'
-import type { Member, LedgerEntry, FundOverviewSummary, EntryDraft, PendingUser, Tab, TransactionFilter } from '../lib/types'
+import type { Member, LedgerEntry, FundOverviewSummary, EntryDraft, PendingUser, Tab, TransactionFilter, UserProfile, BatchEvent, EventDraft } from '../lib/types'
 import { MONTHLY_CONTRIBUTION, currentMonth, today } from '../lib/formatters'
 import { loadWorkspaceData } from '../lib/queries'
-import { approveUser as approveUserMutation, createMember, recordLedgerEntry, removeLedgerEntry, setMemberActive } from '../lib/mutations'
+import {
+  approveUser as approveUserMutation,
+  createBatchEvent,
+  createMember,
+  recordLedgerEntry,
+  rejectPendingUser,
+  removeBatchEvent,
+  removeLedgerEntry,
+  setMemberActive,
+  setUserRole,
+  updateBatchEvent,
+} from '../lib/mutations'
 
 export function useFundWorkspace(client: NonNullable<typeof supabase>, session: Session) {
   const [role, setRole] = useState<AppRole | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [userMember, setUserMember] = useState<Member | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [entries, setEntries] = useState<LedgerEntry[]>([])
+  const [ownEntries, setOwnEntries] = useState<LedgerEntry[]>([])
+  const [events, setEvents] = useState<BatchEvent[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
+  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([])
   const [viewerSummary, setViewerSummary] = useState<FundOverviewSummary | null>(null)
   const [month, setMonth] = useState(currentMonth())
   const [tab, setTab] = useState<Tab>('overview')
@@ -34,27 +50,52 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
     }
     if (result.kind === 'pending') {
       setRole('pending')
+      setUserProfile(result.profile ?? null)
       setMembers([])
       setEntries([])
+      setOwnEntries([])
+      setEvents([])
       setPendingUsers([])
+      setAllProfiles([])
       setError('')
       setLoading(false)
       return
     }
     if (result.kind === 'viewer') {
       setRole('viewer')
+      setUserProfile(result.profile)
+      setUserMember(result.member)
+      setOwnEntries(result.ownEntries)
+      setEvents(result.events)
+      setEntries(result.eventEntries)
       setViewerSummary(result.summary)
       setMembers([])
-      setEntries([])
       setPendingUsers([])
+      setAllProfiles([])
       setError('')
       setLoading(false)
       return
     }
-    setRole(result.role)
+
+    // Admin
+    setRole('admin')
+    setUserProfile(result.profile)
     setMembers(result.members)
     setEntries(result.entries)
+    setEvents(result.events)
     setPendingUsers(result.pendingUsers)
+    setAllProfiles(result.allProfiles)
+    if (result.summary) {
+      setViewerSummary(result.summary)
+    }
+
+    // Match admin's own member row if available
+    const matched = result.members.find((m) => m.registration_number === result.profile.registration_number)
+    setUserMember(matched ?? null)
+    if (matched) {
+      setOwnEntries(result.entries.filter((e) => e.member_id === matched.id && e.entry_type === 'monthly'))
+    }
+
     setError('')
     setLoading(false)
   }, [client, month])
@@ -140,13 +181,102 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
     if (action === 'restore') setError('')
   }
 
-  async function approveUser(user: PendingUser, registrationNumber?: number) {
+  async function approveUser(user: PendingUser, registrationNumber?: number, fullName?: string) {
     setError('')
-    const { error: approvalError } = await approveUserMutation(client, user.id, registrationNumber)
+    const { error: approvalError } = await approveUserMutation(client, user.id, registrationNumber, fullName)
     if (approvalError) {
       setError(approvalError.code === '23505'
-        ? `Registration number ${user.registration_number ?? ''} is already assigned to an approved account.`
+        ? `Registration number ${registrationNumber ?? user.registration_number ?? ''} is already assigned to an approved account.`
         : approvalError.message)
+      return
+    }
+    await loadData(session.user.id)
+  }
+
+  async function rejectUser(user: PendingUser) {
+    setError('')
+    const { error: rejectError } = await rejectPendingUser(client, user.id)
+    if (rejectError) {
+      setError(rejectError.message)
+      return
+    }
+    await loadData(session.user.id)
+  }
+
+  async function changeUserRole(userId: string, newRole: AppRole) {
+    setError('')
+    const { error: roleError } = await setUserRole(client, userId, newRole)
+    if (roleError) {
+      setError(roleError.message)
+      return
+    }
+    setAllProfiles((current) =>
+      current.map((p) => (p.id === userId ? { ...p, role: newRole } : p))
+    )
+    await loadData(session.user.id)
+  }
+
+  async function addBatchEvent(draft: EventDraft) {
+    setError('')
+    const { data, error: createError } = await createBatchEvent(client, draft, session.user.id)
+    if (createError) {
+      // Fallback: create mock local event if table is not yet in Supabase
+      setError(createError.message)
+      return
+    }
+    if (data) {
+      setEvents((current) => [data as BatchEvent, ...current])
+    }
+    await loadData(session.user.id)
+  }
+
+  async function editBatchEvent(eventId: string, draft: Partial<EventDraft>) {
+    setError('')
+    const { error: updateError } = await updateBatchEvent(client, eventId, draft)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setEvents((current) =>
+      current.map((ev) => (ev.id === eventId ? { ...ev, ...draft } : ev))
+    )
+    await loadData(session.user.id)
+  }
+
+  async function deleteBatchEvent(eventId: string) {
+    setError('')
+    const { error: deleteError } = await removeBatchEvent(client, eventId)
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+    setEvents((current) => current.filter((ev) => ev.id !== eventId))
+    await loadData(session.user.id)
+  }
+
+  async function recordEventItem(draft: {
+    entry_type: 'event' | 'expense'
+    amount: number
+    member_id: string | null
+    event_id: string
+    event_name: string
+    notes: string | null
+    entry_date: string
+  }) {
+    setError('')
+    const { error: itemError } = await recordLedgerEntry(client, {
+      entry_type: draft.entry_type,
+      amount: draft.amount,
+      member_id: draft.member_id,
+      event_id: draft.event_id,
+      event_name: draft.event_name,
+      notes: draft.notes,
+      entry_date: draft.entry_date,
+      period_month: null,
+    }, session.user.id)
+
+    if (itemError) {
+      setError(itemError.message)
       return
     }
     await loadData(session.user.id)
@@ -168,11 +298,13 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
     if (signOutError) setError(signOutError.message)
   }
 
-  function openEntry(entryType: EntryType = 'monthly', memberId: string | null = null) {
+  function openEntry(entryType: EntryType = 'monthly', memberId: string | null = null, eventId: string | null = null, eventName: string | null = null) {
     setEntryDefaults({
       entry_type: entryType,
       member_id: memberId,
       period_month: `${month}-01`,
+      event_id: eventId,
+      event_name: eventName,
       entry_date: today(),
       amount: entryType === 'monthly' ? MONTHLY_CONTRIBUTION : 0,
     })
@@ -180,11 +312,13 @@ export function useFundWorkspace(client: NonNullable<typeof supabase>, session: 
   }
 
   return {
-    role, members, entries, pendingUsers, viewerSummary, month, setMonth, tab, setTab, loading, setLoading,
+    role, userProfile, userMember, members, entries, ownEntries, events, pendingUsers, allProfiles, viewerSummary, month, setMonth, tab, setTab, loading, setLoading,
     error, setError, modal, setModal, entryDefaults, saving, search, setSearch,
     transactionFilter, setTransactionFilter, mobileNavOpen, setMobileNavOpen, isAdmin,
     loadData, activeMembers, monthEntries, monthlyTotal, eventTotal, balance, paidCount,
-    dueCount, monthlyTarget, progress, recordEntry, addMember, toggleMember, approveUser, deleteEntry,
+    dueCount, monthlyTarget, progress, recordEntry, addMember, toggleMember, approveUser, rejectUser, changeUserRole,
+    addBatchEvent, editBatchEvent, deleteBatchEvent, recordEventItem, deleteEntry,
     signOut, openEntry,
   }
 }
+

@@ -1,7 +1,7 @@
-import { ArrowUpRight, CalendarDays, Check, Clock3, Coins, Download, Plus, Search, ShieldCheck, X } from 'lucide-react'
+import { AlertCircle, ArrowUpRight, CalendarDays, Check, Clock3, Coins, Copy, Download, Plus, Search, ShieldCheck, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import type { EntryType } from '../lib/database.types'
-import type { Member, LedgerEntry, EntryDraft, TransactionFilter } from '../lib/types'
+import type { BatchEvent, Member, LedgerEntry, EntryDraft, TransactionFilter } from '../lib/types'
 import { MONTHLY_CONTRIBUTION, money, shortDate, currentMonth, today, displayMonth, displayName, downloadCsv } from '../lib/formatters'
 import { Dialog } from '../components/Dialog'
 import { MemberCell } from '../members/MembersView'
@@ -20,33 +20,189 @@ export function Contributions({
   onRecord: (type?: EntryType, memberId?: string | null) => void
   onDelete: (entry: LedgerEntry) => void
 }) {
+  const [filterState, setFilterState] = useState<'all' | 'unpaid' | 'paid'>('all')
+  const [copyToast, setCopyToast] = useState('')
+
   const paidByMember = new Map(entries.filter((entry) => entry.entry_type === 'monthly' && entry.member_id).map((entry) => [entry.member_id, entry]))
-  const filtered = members.filter((member) => (
-    member.full_name.toLowerCase().includes(search.toLowerCase())
-    || String(member.registration_number).includes(search.trim().replace(/^#/, ''))
-  ))
+  
   const paidTotal = entries.filter((entry) => entry.entry_type === 'monthly').reduce((sum, entry) => sum + Number(entry.amount), 0)
   const paidCount = paidByMember.size
   const dueCount = Math.max(0, members.length - paidCount)
+
+  const filtered = members.filter((member) => {
+    const isPaid = paidByMember.has(member.id)
+    if (filterState === 'unpaid' && isPaid) return false
+    if (filterState === 'paid' && !isPaid) return false
+
+    return (
+      member.full_name.toLowerCase().includes(search.toLowerCase())
+      || String(member.registration_number).includes(search.trim().replace(/^#/, ''))
+    )
+  })
+
+  function copyUnpaidList() {
+    const unpaidMembers = members.filter((m) => !paidByMember.has(m.id))
+    if (unpaidMembers.length === 0) {
+      setCopyToast('All members have paid for this month!')
+      setTimeout(() => setCopyToast(''), 3000)
+      return
+    }
+    const text = [
+      `Unpaid Members - ${displayMonth(month)}:`,
+      ...unpaidMembers.map((m) => `#${m.registration_number} - ${m.full_name}`),
+    ].join('\n')
+
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopyToast(`Copied ${unpaidMembers.length} unpaid members to clipboard!`)
+      setTimeout(() => setCopyToast(''), 3000)
+    })
+  }
+
   return (
     <>
-      <PageHeading eyebrow="MONTH BY MONTH" title="Contributions" detail="See who has chipped in and what’s still pending." action={<MonthPicker month={month} setMonth={setMonth} />} />
+      <PageHeading
+        eyebrow="ADMINISTRATOR VIEW · MONTH BY MONTH"
+        title="Contributions"
+        detail="Track and record who has contributed for the month. Unpaid member records are restricted to administrators."
+        action={<MonthPicker month={month} setMonth={setMonth} />}
+      />
+
+      {copyToast && (
+        <div className="toast-notification" role="status">
+          <Check size={16} />
+          <span>{copyToast}</span>
+        </div>
+      )}
+
       <section className="contribution-summary">
         <div><span>Collected this month</span><strong>{money.format(paidTotal)}</strong></div>
         <div><span>Members paid</span><strong>{paidCount}<small> / {members.length}</small></strong></div>
         <div><span>Still pending</span><strong className={dueCount ? 'pending-number' : ''}>{dueCount}</strong></div>
         <div className="contribution-target"><span>Standard contribution</span><strong>{money.format(MONTHLY_CONTRIBUTION)} <small>/ month</small></strong></div>
       </section>
+
       <section className="panel data-panel">
-        <div className="table-toolbar"><div><h2>Member payments</h2><span>{displayMonth(month)}</span></div><div className="toolbar-actions"><label className="search-field"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a member" /></label><button className="icon-button download-button" title="Download contributions as CSV" onClick={() => downloadCsv(`contributions-${month}.csv`, ['Registration', 'Member', 'Status', 'Amount LKR'], members.map((member) => { const entry = paidByMember.get(member.id); return [member.registration_number, member.full_name, entry ? 'Paid' : 'Pending', entry?.amount ?? ''] }))}><Download size={17} /></button></div></div>
-        <div className="table-scroll"><table className="data-table"><thead><tr><th>MEMBER</th><th>REG. NO.</th><th>AMOUNT</th><th>STATUS</th><th>DATE PAID</th>{canEdit && <th />}</tr></thead><tbody>
-          {filtered.map((member) => {
-            const entry = paidByMember.get(member.id)
-            return <tr key={member.id}><td><MemberCell member={member} /></td><td><span className="registration-tag">#{member.registration_number}</span></td><td>{entry ? money.format(Number(entry.amount)) : <span className="muted-cell">—</span>}</td><td><span className={`status-pill ${entry ? 'status-paid' : 'status-pending'}`}><i />{entry ? 'Paid' : 'Pending'}</span></td><td>{entry ? shortDate.format(new Date(`${entry.entry_date}T00:00:00`)) : <span className="muted-cell">—</span>}</td>{canEdit && <td className="table-action-cell">{entry ? <button className="small-action remove-payment" onClick={() => onDelete(entry)} title="Remove payment record"><X size={14} /></button> : <button className="small-action" onClick={() => onRecord('monthly', member.id)}><Plus size={14} />Record</button>}</td>}</tr>
-          })}
-          {filtered.length === 0 && <tr><td colSpan={canEdit ? 6 : 5} className="table-empty">{members.length ? 'No members match your search.' : 'No active members yet. Add members to begin tracking.'}</td></tr>}
-        </tbody></table></div>
-        <div className="table-footer"><span>Showing {filtered.length} of {members.length} active members</span><span>{dueCount === 0 && members.length ? <><Check size={14} /> All caught up</> : `${dueCount} ${dueCount === 1 ? 'payment' : 'payments'} pending`}</span></div>
+        <div className="table-toolbar">
+          <div>
+            <h2>Member monthly payments</h2>
+            <span>{displayMonth(month)} · Admin review</span>
+          </div>
+          <div className="toolbar-actions">
+            <label className="search-field">
+              <Search size={16} />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a member" />
+            </label>
+
+            {/* Admin filter for Unpaid / Paid */}
+            <div className="filter-tabs" role="group" aria-label="Filter payment status">
+              <button
+                className={filterState === 'all' ? 'filter-tab-active' : ''}
+                onClick={() => setFilterState('all')}
+              >
+                All ({members.length})
+              </button>
+              <button
+                className={`filter-unpaid-tab ${filterState === 'unpaid' ? 'filter-tab-active filter-tab-unpaid-active' : ''}`}
+                onClick={() => setFilterState('unpaid')}
+              >
+                <AlertCircle size={13} /> Unpaid ({dueCount})
+              </button>
+              <button
+                className={filterState === 'paid' ? 'filter-tab-active' : ''}
+                onClick={() => setFilterState('paid')}
+              >
+                Paid ({paidCount})
+              </button>
+            </div>
+
+            {dueCount > 0 && (
+              <button
+                className="button button-secondary copy-unpaid-btn"
+                title="Copy list of members who have not paid yet"
+                onClick={copyUnpaidList}
+              >
+                <Copy size={15} />
+                <span>Copy unpaid</span>
+              </button>
+            )}
+
+            <button
+              className="icon-button download-button"
+              title="Download contributions as CSV"
+              onClick={() => downloadCsv(`contributions-${month}.csv`, ['Registration', 'Member', 'Status', 'Amount LKR'], members.map((member) => {
+                const entry = paidByMember.get(member.id)
+                return [member.registration_number, member.full_name, entry ? 'Paid' : 'Pending', entry?.amount ?? '']
+              }))}
+            >
+              <Download size={17} />
+            </button>
+          </div>
+        </div>
+
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>MEMBER</th>
+                <th>REG. NO.</th>
+                <th>AMOUNT</th>
+                <th>STATUS</th>
+                <th>DATE PAID</th>
+                {canEdit && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((member) => {
+                const entry = paidByMember.get(member.id)
+                return (
+                  <tr key={member.id} className={!entry ? 'row-pending' : ''}>
+                    <td><MemberCell member={member} /></td>
+                    <td><span className="registration-tag">#{member.registration_number}</span></td>
+                    <td>{entry ? money.format(Number(entry.amount)) : <span className="muted-cell">—</span>}</td>
+                    <td>
+                      <span className={`status-pill ${entry ? 'status-paid' : 'status-pending'}`}>
+                        <i />{entry ? 'Paid' : 'Pending'}
+                      </span>
+                    </td>
+                    <td>{entry ? shortDate.format(new Date(`${entry.entry_date}T00:00:00`)) : <span className="muted-cell">—</span>}</td>
+                    {canEdit && (
+                      <td className="table-action-cell">
+                        {entry ? (
+                          <button className="small-action remove-payment" onClick={() => onDelete(entry)} title="Remove payment record">
+                            <X size={14} />
+                          </button>
+                        ) : (
+                          <button className="small-action record-payment-action" onClick={() => onRecord('monthly', member.id)}>
+                            <Plus size={14} />Record
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={canEdit ? 6 : 5} className="table-empty">
+                    {filterState === 'unpaid'
+                      ? 'Awesome! All members have paid for this month.'
+                      : search
+                        ? 'No members match your search.'
+                        : 'No active members found.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="table-footer">
+          <span>Showing {filtered.length} of {members.length} active members</span>
+          <span>
+            {dueCount === 0 && members.length
+              ? <><Check size={14} /> All caught up</>
+              : `${dueCount} ${dueCount === 1 ? 'member' : 'members'} pending`}
+          </span>
+        </div>
       </section>
     </>
   )
@@ -107,9 +263,10 @@ export function TransactionRow({
 }
 
 export function EntryDialog({
-  members, defaults, busy, onClose, onSubmit,
+  members, events, defaults, busy, onClose, onSubmit,
 }: {
   members: Member[]
+  events?: BatchEvent[]
   defaults: Partial<EntryDraft>
   busy: boolean
   onClose: () => void
@@ -120,19 +277,29 @@ export function EntryDialog({
   const [amount, setAmount] = useState(String(defaults.amount ?? 0))
   const [month, setMonth] = useState((defaults.period_month ?? `${currentMonth()}-01`).slice(0, 7))
   const [entryDate, setEntryDate] = useState(defaults.entry_date ?? today())
-  const [eventName, setEventName] = useState('')
-  const [notes, setNotes] = useState('')
+  const [eventId, setEventId] = useState(defaults.event_id ?? '')
+  const [eventName, setEventName] = useState(defaults.event_name ?? '')
+  const [notes, setNotes] = useState(defaults.notes ?? '')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const numericAmount = Number(amount)
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) return
+
+    // If event selected from dropdown, sync name
+    let finalEventName = eventName.trim()
+    if (eventId && events) {
+      const matched = events.find((ev) => ev.id === eventId)
+      if (matched) finalEventName = matched.title
+    }
+
     await onSubmit({
       entry_type: type,
       amount: numericAmount,
       member_id: type === 'monthly' ? memberId : memberId || null,
       period_month: type === 'monthly' ? `${month}-01` : null,
-      event_name: type === 'monthly' ? null : eventName.trim() || null,
+      event_id: type === 'monthly' ? null : eventId || null,
+      event_name: type === 'monthly' ? null : finalEventName || null,
       notes: notes.trim() || null,
       entry_date: entryDate,
     })
@@ -144,7 +311,33 @@ export function EntryDialog({
         <label>Record type<select value={type} onChange={(event) => setType(event.target.value as EntryType)}><option value="monthly">Monthly contribution</option><option value="event">Event collection</option><option value="expense">Expense / withdrawal</option></select></label>
         {type === 'monthly' && <label>Member<select value={memberId} onChange={(event) => setMemberId(event.target.value)} required><option value="">Select a member</option>{members.map((member) => <option key={member.id} value={member.id}>#{member.registration_number} · {member.full_name}</option>)}</select></label>}
         {type !== 'monthly' && <label>Member <span className="optional-label">optional</span><select value={memberId} onChange={(event) => setMemberId(event.target.value)}><option value="">No specific member</option>{members.map((member) => <option key={member.id} value={member.id}>#{member.registration_number} · {member.full_name}</option>)}</select></label>}
-        {type !== 'monthly' && <label>{type === 'event' ? 'Event name' : 'Expense description'}<input value={eventName} onChange={(event) => setEventName(event.target.value)} placeholder={type === 'event' ? 'e.g. Batch trip' : 'e.g. Venue deposit'} required maxLength={120} /></label>}
+        
+        {type !== 'monthly' && events && events.length > 0 && (
+          <label>
+            Linked event <span className="optional-label">optional</span>
+            <select
+              value={eventId}
+              onChange={(e) => {
+                setEventId(e.target.value)
+                const found = events.find((ev) => ev.id === e.target.value)
+                if (found) setEventName(found.title)
+              }}
+            >
+              <option value="">Custom event name / General</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.title}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {type !== 'monthly' && (!eventId || !events || events.length === 0) && (
+          <label>
+            {type === 'event' ? 'Event name' : 'Expense description'}
+            <input value={eventName} onChange={(event) => setEventName(event.target.value)} placeholder={type === 'event' ? 'e.g. Batch trip' : 'e.g. Venue deposit'} required maxLength={120} />
+          </label>
+        )}
+
         <div className="form-two-col">
           <label>Amount (LKR)<input type="number" min="1" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} required /></label>
           {type === 'monthly' ? <label>Contribution month<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} required /></label> : <label>Date<input type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} required /></label>}
@@ -156,3 +349,4 @@ export function EntryDialog({
     </Dialog>
   )
 }
+

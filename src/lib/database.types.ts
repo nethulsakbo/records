@@ -52,6 +52,36 @@ export type Database = {
         }
         Relationships: []
       }
+      events: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          event_date: string
+          target_amount: number
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          event_date?: string
+          target_amount?: number
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          event_date?: string
+          target_amount?: number
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       ledger_entries: {
         Row: {
           id: string
@@ -60,6 +90,7 @@ export type Database = {
           member_id: string | null
           period_month: string | null
           event_name: string | null
+          event_id: string | null
           notes: string | null
           entry_date: string
           created_by: string
@@ -72,6 +103,7 @@ export type Database = {
           member_id?: string | null
           period_month?: string | null
           event_name?: string | null
+          event_id?: string | null
           notes?: string | null
           entry_date?: string
           created_by: string
@@ -84,6 +116,7 @@ export type Database = {
           member_id?: string | null
           period_month?: string | null
           event_name?: string | null
+          event_id?: string | null
           notes?: string | null
           entry_date?: string
           created_by?: string

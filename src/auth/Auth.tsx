@@ -80,6 +80,8 @@ export function AuthScreen({
   setError: (message: string) => void
 }) {
   const [isSignUp, setIsSignUp] = useState(false)
+  const [fullName, setFullName] = useState('')
+  const [registrationNumber, setRegistrationNumber] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isForgotPassword, setIsForgotPassword] = useState(false)
@@ -104,11 +106,19 @@ export function AuthScreen({
       return
     }
 
+    const regNum = registrationNumber ? Number(registrationNumber) : null
+
     const result = isSignUp
       ? await client.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: window.location.origin },
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            registration_number: regNum,
+          },
+          emailRedirectTo: window.location.origin,
+        },
       })
       : await client.auth.signInWithPassword({ email, password })
     setBusy(false)
@@ -116,15 +126,19 @@ export function AuthScreen({
       setError(readableAuthError(result.error.message))
       return
     }
-    if (isSignUp && !result.data.session) {
-      setNotice('Check your email to confirm your account. You can sign in as soon as it is confirmed.')
+    if (isSignUp) {
+      if (!result.data.session) {
+        setNotice('Account created! Please check your email to confirm. Once confirmed, an administrator will approve your batch registration.')
+      } else {
+        setNotice('Account created! An administrator will review and approve your registration to grant workspace access.')
+      }
     }
   }
 
   const title = isForgotPassword
     ? 'Reset your password'
     : isSignUp
-      ? 'Create your account'
+      ? 'Join your batch fund'
       : 'Welcome back'
 
   return (
@@ -149,15 +163,41 @@ export function AuthScreen({
             {isForgotPassword
               ? 'Enter your account email and we’ll send you a password reset link.'
               : isSignUp
-                ? 'Join your batch’s shared fund workspace.'
+                ? 'Register your batch member account for fund tracking.'
                 : 'Sign in to see how your batch fund is doing.'}
           </p>
           <form onSubmit={submit} className="auth-form">
+            {isSignUp && (
+              <>
+                <label>
+                  Full name
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    placeholder="e.g. Kasun Perera"
+                    required
+                  />
+                </label>
+                <label>
+                  Registration number (1–220)
+                  <input
+                    type="number"
+                    min="1"
+                    max="220"
+                    value={registrationNumber}
+                    onChange={(event) => setRegistrationNumber(event.target.value)}
+                    placeholder="e.g. 42"
+                    required
+                  />
+                </label>
+              </>
+            )}
             <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></label>
             {!isForgotPassword && <label>Password<input type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" required /></label>}
             {error && <div className="form-alert" role="alert">{error}</div>}
             {notice && <div className="form-success" role="status">{notice}</div>}
-            <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isForgotPassword ? 'Send reset link' : isSignUp ? 'Create account' : 'Sign in'}<ArrowUpRight size={17} /></button>
+            <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isForgotPassword ? 'Send reset link' : isSignUp ? 'Request access' : 'Sign in'}<ArrowUpRight size={17} /></button>
           </form>
           {isForgotPassword
             ? <p className="auth-toggle"><button type="button" onClick={() => { setIsForgotPassword(false); setError(''); setNotice('') }}>Back to sign in</button></p>
@@ -165,7 +205,7 @@ export function AuthScreen({
               {!isSignUp && <p className="auth-toggle"><button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setNotice('') }}>Forgot password?</button></p>}
               <p className="auth-toggle">{isSignUp ? 'Already have an account?' : 'New to the workspace?'} <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(''); setNotice('') }}>{isSignUp ? 'Sign in' : 'Create an account'}</button></p>
             </>}
-          <div className="auth-privacy"><ShieldCheck size={16} /><span>Confirm your email to access the shared fund summary.</span></div>
+          <div className="auth-privacy"><ShieldCheck size={16} /><span>{isSignUp ? 'New registrations are verified by batch administrators.' : 'Confirm your email to access the shared fund workspace.'}</span></div>
         </div>
         <span className="auth-mobile-footer">UNIVERSITY BATCH FUND · LKR</span>
       </section>

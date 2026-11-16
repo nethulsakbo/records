@@ -1,4 +1,4 @@
-import type { EntryType } from './database.types'
+import type { AppRole, EntryType } from './database.types'
 
 export type Member = {
   id: string
@@ -8,11 +8,37 @@ export type Member = {
   created_at: string
 }
 
+export type UserProfile = {
+  id: string
+  email: string
+  registration_number: number | null
+  role: AppRole
+  created_at: string
+}
+
 export type PendingUser = {
   id: string
   email: string
   registration_number: number | null
+  full_name?: string | null
   created_at: string
+}
+
+export type BatchEvent = {
+  id: string
+  title: string
+  description: string | null
+  event_date: string
+  target_amount: number
+  created_by?: string
+  created_at: string
+}
+
+export type EventDraft = {
+  title: string
+  description: string | null
+  event_date: string
+  target_amount: number
 }
 
 export type LedgerEntry = {
@@ -22,6 +48,7 @@ export type LedgerEntry = {
   member_id: string | null
   period_month: string | null
   event_name: string | null
+  event_id?: string | null
   notes: string | null
   entry_date: string
   created_by: string
@@ -45,10 +72,11 @@ export type EntryDraft = {
   member_id: string | null
   period_month: string | null
   event_name: string | null
+  event_id?: string | null
   notes: string | null
   entry_date: string
 }
 
-export type Tab = 'overview' | 'contributions' | 'members' | 'transactions' | 'approvals'
+export type Tab = 'overview' | 'events' | 'contributions' | 'members' | 'transactions' | 'approvals' | 'roles'
 
 export type TransactionFilter = 'all' | 'event' | 'expense'
